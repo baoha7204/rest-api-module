@@ -2,6 +2,7 @@ import { validationResult } from "express-validator";
 import Post from "../models/post.js";
 import User from "../models/user.js";
 import { deleteFile } from "../utils/helpers.js";
+import Io from "../socket.js";
 
 const PER_PAGE = 2;
 
@@ -10,6 +11,7 @@ export const getPosts = async (req, res, next) => {
   const totalItems = await Post.find().countDocuments();
   const posts = await Post.find()
     .skip((currentPage - 1) * PER_PAGE)
+    .sort({ createdAt: -1 })
     .limit(PER_PAGE)
     .populate("creator", "name");
   res.status(200).json({
@@ -50,6 +52,10 @@ export const createPost = async (req, res, next) => {
   user.posts.push(post);
   await user.save();
   const result = await post.save();
+  Io.getIO().emit("posts", {
+    action: "create",
+    post: { ...post._doc, creator: { _id: userId, name: user.name } },
+  });
   // Create post in db
   res.status(201).json({
     message: "Post created successfully!",
@@ -90,15 +96,14 @@ const updatePost = async (req, res, next) => {
     error.statusCode = 422;
     throw error;
   }
-
   const postId = req.params.postId;
-  const post = await Post.findById(postId);
+  const post = await Post.findById(postId).populate("creator", "name");
   if (!post) {
     const error = new Error("Could not find post.");
     error.statusCode = 404;
     throw error;
   }
-  if (post.creator.toString() !== req.userId) {
+  if (post.creator._id.toString() !== req.userId) {
     const error = new Error("Not authorized!");
     error.statusCode = 403;
     throw error;
@@ -110,6 +115,7 @@ const updatePost = async (req, res, next) => {
   post.imageUrl = imageUrl;
   post.content = content;
   const result = await post.save();
+  Io.getIO().emit("posts", { action: "update", post: result });
   res.status(200).json({ message: "Post updated!", post: result });
 };
 
@@ -131,6 +137,7 @@ export const deletePost = async (req, res, next) => {
   const user = await User.findById(req.userId);
   user.posts.pull(postId);
   await user.save();
+  Io.getIO().emit("posts", { action: "delete", post: postId });
   res.status(200).json({ message: "Deleted post.", post: result });
 };
 
