@@ -13,7 +13,7 @@ export const getPosts = async (req, res, next) => {
     .skip((currentPage - 1) * PER_PAGE)
     .sort({ createdAt: -1 })
     .limit(PER_PAGE)
-    .populate("creator", "name");
+    .populate("creator");
   res.status(200).json({
     message: "Fetched posts successfully.",
     posts,
@@ -78,7 +78,7 @@ export const getPost = async (req, res, next) => {
   res.status(200).json({ message: "Post fetched.", post: post });
 };
 
-const updatePost = async (req, res, next) => {
+export const updatePost = async (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     const err = new Error("Validation failed, form data is incorrect!");
